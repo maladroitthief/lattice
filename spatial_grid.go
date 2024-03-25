@@ -3,7 +3,7 @@ package lattice
 import (
 	"errors"
 	"math"
-	"strings"
+	"sync"
 
 	"github.com/maladroitthief/caravan"
 	"github.com/maladroitthief/mosaic"
@@ -11,8 +11,8 @@ import (
 
 type (
 	SpatialGrid[T comparable] struct {
-		sb        strings.Builder
 		Nodes     [][]spatialGridNode[T]
+		nodesMu   sync.RWMutex
 		SizeX     int
 		SizeY     int
 		ChunkSize float64
@@ -32,12 +32,15 @@ var (
 
 func NewSpatialGrid[T comparable](x, y int, size float64) *SpatialGrid[T] {
 	nodes := make([][]spatialGridNode[T], x)
-	for i := range nodes {
-		nodes[i] = make([]spatialGridNode[T], y)
+	for iX := range nodes {
+		nodes[iX] = make([]spatialGridNode[T], y)
+		for iY := range y {
+			nodes[iX][iY].x = iX
+			nodes[iX][iY].y = iY
+		}
 	}
 
 	return &SpatialGrid[T]{
-		sb:        strings.Builder{},
 		SizeX:     x,
 		SizeY:     y,
 		ChunkSize: size,
@@ -46,8 +49,10 @@ func NewSpatialGrid[T comparable](x, y int, size float64) *SpatialGrid[T] {
 }
 
 func (sg *SpatialGrid[T]) Size() int {
-	size := 0
+	sg.nodesMu.RLock()
+	defer sg.nodesMu.RUnlock()
 
+	size := 0
 	for x := range sg.Nodes {
 		for y := range sg.Nodes[x] {
 			size += len(sg.Nodes[x][y].items)
@@ -58,13 +63,16 @@ func (sg *SpatialGrid[T]) Size() int {
 }
 
 func (sg *SpatialGrid[T]) Insert(val T, bounds mosaic.Rectangle) {
+	sg.nodesMu.Lock()
+	defer sg.nodesMu.Unlock()
+
 	minPoint, maxPoint := bounds.MinPoint(), bounds.MaxPoint()
 	xMinIndex, yMinIndex := sg.Location(minPoint.X, minPoint.Y)
 	xMaxIndex, yMaxIndex := sg.Location(maxPoint.X, maxPoint.Y)
 
-	for x, xn := xMinIndex, xMaxIndex; x <= xn; x++ {
-		for y, yn := yMinIndex, yMaxIndex; y <= yn; y++ {
-			sg.Nodes[x][y] = sg.Nodes[x][y].Insert(val)
+	for xMin, xMax := xMinIndex, xMaxIndex; xMin <= xMax; xMin++ {
+		for yMin, yMax := yMinIndex, yMaxIndex; yMin <= yMax; yMin++ {
+			sg.Nodes[xMin][yMin] = sg.Nodes[xMin][yMin].Insert(val)
 		}
 	}
 }
@@ -75,6 +83,9 @@ func (sg *SpatialGrid[T]) Update(val T, oldBounds, newBounds mosaic.Rectangle) {
 }
 
 func (sg *SpatialGrid[T]) Delete(val T, bounds mosaic.Rectangle) {
+	sg.nodesMu.Lock()
+	defer sg.nodesMu.Unlock()
+
 	minPoint, maxPoint := bounds.MinPoint(), bounds.MaxPoint()
 	xMinIndex, yMinIndex := sg.Location(minPoint.X, minPoint.Y)
 	xMaxIndex, yMaxIndex := sg.Location(maxPoint.X, maxPoint.Y)
@@ -87,6 +98,9 @@ func (sg *SpatialGrid[T]) Delete(val T, bounds mosaic.Rectangle) {
 }
 
 func (sg *SpatialGrid[T]) FindNear(bounds mosaic.Rectangle) []T {
+	sg.nodesMu.RLock()
+	defer sg.nodesMu.RUnlock()
+
 	set := map[T]struct{}{}
 	items := []T{}
 	minPoint, maxPoint := bounds.MinPoint(), bounds.MaxPoint()
@@ -109,14 +123,21 @@ func (sg *SpatialGrid[T]) FindNear(bounds mosaic.Rectangle) []T {
 }
 
 func (sg *SpatialGrid[T]) Drop() {
-	for i := range sg.Nodes {
-		sg.Nodes[i] = make([]spatialGridNode[T], sg.SizeY)
+	sg.nodesMu.Lock()
+	defer sg.nodesMu.Unlock()
+
+	for iX := range sg.Nodes {
+		sg.Nodes[iX] = make([]spatialGridNode[T], sg.SizeY)
+		for iY := range sg.SizeY {
+			sg.Nodes[iX][iY].x = iX
+			sg.Nodes[iX][iY].y = iY
+		}
 	}
 }
 
 func (sg *SpatialGrid[T]) Location(x, y float64) (xIndex, yIndex int) {
-	xIndex = int(math.Round(x / sg.ChunkSize))
-	yIndex = int(math.Round(y / sg.ChunkSize))
+	xIndex = int(math.Floor(x / sg.ChunkSize))
+	yIndex = int(math.Floor(y / sg.ChunkSize))
 
 	xIndex = max(xIndex, 0)
 	xIndex = min(xIndex, sg.SizeX-1)
@@ -126,13 +147,34 @@ func (sg *SpatialGrid[T]) Location(x, y float64) (xIndex, yIndex int) {
 	return xIndex, yIndex
 }
 
+func (sg *SpatialGrid[T]) GetItemsAtLocation(x, y int) []T {
+	sg.nodesMu.RLock()
+	defer sg.nodesMu.RUnlock()
+
+	return sg.Nodes[x][y].Items()
+}
+
 func (sg *SpatialGrid[T]) Node(x, y float64) spatialGridNode[T] {
 	xIndex, yIndex := sg.Location(x, y)
 	return sg.Nodes[xIndex][yIndex]
 }
 
-func (sg *SpatialGrid[T]) GetItemsAtLocation(x, y int) []T {
-	return sg.Nodes[x][y].Items()
+func (sg *SpatialGrid[T]) Edges(sgn spatialGridNode[T]) []spatialGridNode[T] {
+	edges := []spatialGridNode[T]{}
+	for _, direction := range directions {
+		nextX := sgn.x + direction[0]
+		nextY := sgn.y + direction[1]
+		if nextX < 0 || nextX >= sg.SizeX {
+			continue
+		}
+		if nextY < 0 || nextY >= sg.SizeY {
+			continue
+		}
+
+		edges = append(edges, sg.Nodes[nextX][nextY])
+	}
+
+	return edges
 }
 
 func (sg *SpatialGrid[T]) Search(
@@ -141,6 +183,9 @@ func (sg *SpatialGrid[T]) Search(
 	maxDepth int,
 	process func([]T) error,
 ) error {
+	sg.nodesMu.RLock()
+	defer sg.nodesMu.RUnlock()
+
 	start := sg.Node(x, y)
 
 	type index struct{ x, y int }
@@ -187,24 +232,6 @@ func (sg *SpatialGrid[T]) Search(
 	return nil
 }
 
-func (sg *SpatialGrid[T]) Edges(sgn spatialGridNode[T]) []spatialGridNode[T] {
-	edges := []spatialGridNode[T]{}
-	for _, direction := range directions {
-		nextX := sgn.x + direction[0]
-		nextY := sgn.y + direction[1]
-		if nextX < 0 || nextX >= sg.SizeX {
-			continue
-		}
-		if nextY < 0 || nextY >= sg.SizeY {
-			continue
-		}
-
-		edges = append(edges, sg.Nodes[nextX][nextY])
-	}
-
-	return edges
-}
-
 func NewSpatialGridNode[T comparable](x, y int) spatialGridNode[T] {
 	return spatialGridNode[T]{
 		items: make([]T, 0),
@@ -241,4 +268,32 @@ func (sgn spatialGridNode[T]) Delete(item T) spatialGridNode[T] {
 	}
 
 	return sgn
+}
+
+func (sgn *SpatialGrid[T]) WalkGrid(v, w mosaic.Vector) []mosaic.Vector {
+	delta := w.Subtract(v)
+	nX, nY := math.Abs(delta.X), math.Abs(delta.Y)
+	signX, signY := 1.0, 1.0
+	if delta.X <= 0 {
+		signX = -1
+	}
+	if delta.Y <= 0 {
+		signY = -1
+	}
+	vector := v.Clone()
+	vectors := []mosaic.Vector{vector.Clone()}
+
+	i, j := 0.0, 0.0
+	for i < nX || j < nY {
+		if (1+2*i)*nY < (1+2*j)*nX {
+			vector.X += signX
+			i++
+		} else {
+			vector.Y += signY
+			j++
+		}
+		vectors = append(vectors, vector.Clone())
+	}
+
+	return vectors
 }
