@@ -19,15 +19,24 @@ type (
 	}
 
 	spatialGridNode[T comparable] struct {
-		x     int
-		y     int
-		items []T
+		x      int
+		y      int
+		bounds mosaic.Rectangle
+		weight float64
+		items  []spatialGridNodeItem[T]
+	}
+
+	spatialGridNodeItem[T comparable] struct {
+		value  T
+		bounds mosaic.Rectangle
+		weight float64
 	}
 )
 
 var (
 	directions         = [][]int{{0, 1}, {0, -1}, {1, 0}, {-1, 0}}
 	ErrMaxDepthReached = errors.New("search max depth has been reached")
+	ErrPathNotFound    = errors.New("weighted search could not find a path")
 )
 
 func NewSpatialGrid[T comparable](x, y int, size float64) *SpatialGrid[T] {
@@ -35,8 +44,18 @@ func NewSpatialGrid[T comparable](x, y int, size float64) *SpatialGrid[T] {
 	for iX := range nodes {
 		nodes[iX] = make([]spatialGridNode[T], y)
 		for iY := range y {
-			nodes[iX][iY].x = iX
-			nodes[iX][iY].y = iY
+			nodes[iX][iY] = newSpatialGridNode[T](
+				iX,
+				iY,
+				mosaic.NewRectangle(
+					mosaic.NewVector(
+						(float64(iX)*size)+size/2,
+						(float64(iY)*size)+size/2,
+					),
+					size,
+					size,
+				),
+			)
 		}
 	}
 
@@ -72,7 +91,7 @@ func (sg *SpatialGrid[T]) Insert(val T, bounds mosaic.Rectangle) {
 
 	for xMin, xMax := xMinIndex, xMaxIndex; xMin <= xMax; xMin++ {
 		for yMin, yMax := yMinIndex, yMaxIndex; yMin <= yMax; yMin++ {
-			sg.Nodes[xMin][yMin] = sg.Nodes[xMin][yMin].Insert(val)
+			sg.Nodes[xMin][yMin] = sg.Nodes[xMin][yMin].Insert(val, bounds)
 		}
 	}
 }
@@ -154,6 +173,13 @@ func (sg *SpatialGrid[T]) GetItemsAtLocation(x, y int) []T {
 	return sg.Nodes[x][y].Items()
 }
 
+func (sg *SpatialGrid[T]) GetLocationWeight(x, y int) float64 {
+	sg.nodesMu.RLock()
+	defer sg.nodesMu.RUnlock()
+
+	return sg.Nodes[x][y].weight
+}
+
 func (sg *SpatialGrid[T]) Node(x, y float64) spatialGridNode[T] {
 	xIndex, yIndex := sg.Location(x, y)
 	return sg.Nodes[xIndex][yIndex]
@@ -232,37 +258,116 @@ func (sg *SpatialGrid[T]) Search(
 	return nil
 }
 
-func NewSpatialGridNode[T comparable](x, y int) spatialGridNode[T] {
-	return spatialGridNode[T]{
-		items: make([]T, 0),
-		x:     x,
-		y:     y,
+func (sg *SpatialGrid[T]) WeightedSearch(start, end mosaic.Vector) ([]mosaic.Vector, error) {
+	sg.nodesMu.RLock()
+	defer sg.nodesMu.RUnlock()
+
+	heuristic := func(from, to spatialGridNode[T]) float64 {
+		return math.Abs(float64(from.x-to.x)) + math.Abs(float64(from.y-to.y))
 	}
+
+	type index struct {
+		x int
+		y int
+	}
+
+	startNode := sg.Node(start.X, start.Y)
+	endNode := sg.Node(end.X, end.Y)
+
+	cameFrom := map[index]spatialGridNode[T]{}
+	cameFrom[index{startNode.x, startNode.y}] = startNode
+	costs := map[index]float64{}
+
+	pq := caravan.NewPriorityQueue[spatialGridNode[T]](true)
+	pq.Enqueue(startNode, 0)
+
+	for pq.Len() > 0 {
+		currentNode, err := pq.Dequeue()
+		if err != nil {
+			return nil, err
+		}
+
+		if currentNode.x == endNode.x && currentNode.y == endNode.y {
+			break
+		}
+
+		for _, nextNode := range sg.Edges(currentNode) {
+			newCost := costs[index{currentNode.x, currentNode.y}] + nextNode.weight
+			oldCost, ok := costs[index{nextNode.x, nextNode.y}]
+			if ok && newCost >= oldCost {
+				continue
+			}
+
+			costs[index{nextNode.x, nextNode.y}] = newCost
+			priority := newCost + heuristic(nextNode, endNode)
+			pq.Enqueue(nextNode, int(priority))
+			cameFrom[index{nextNode.x, nextNode.y}] = currentNode
+		}
+	}
+
+	pathNodes := []spatialGridNode[T]{}
+	currentNode := endNode
+	_, ok := cameFrom[index{endNode.x, endNode.y}]
+	if !ok {
+		return nil, ErrPathNotFound
+	}
+
+	for (index{currentNode.x, currentNode.y} != index{startNode.x, startNode.y}) {
+		pathNodes = append(pathNodes, currentNode)
+		currentNode = cameFrom[index{currentNode.x, currentNode.y}]
+	}
+
+	pathNodes = append(pathNodes, startNode)
+	path := make([]mosaic.Vector, len(pathNodes))
+	for i := len(pathNodes) - 1; i >= 0; i-- {
+		path[len(pathNodes)-1-i] = mosaic.NewVector(
+			(float64(pathNodes[i].x)*sg.ChunkSize)+sg.ChunkSize/2,
+			(float64(pathNodes[i].y)*sg.ChunkSize)+sg.ChunkSize/2,
+		)
+	}
+
+	return path, nil
+}
+
+func newSpatialGridNode[T comparable](x, y int, bounds mosaic.Rectangle) spatialGridNode[T] {
+	sgn := spatialGridNode[T]{
+		items:  make([]spatialGridNodeItem[T], 0),
+		x:      x,
+		y:      y,
+		bounds: bounds,
+	}
+
+	return sgn
 }
 
 func (sgn spatialGridNode[T]) Items() []T {
 	items := make([]T, len(sgn.items))
 
 	for i := 0; i < len(sgn.items); i++ {
-		items[i] = sgn.items[i]
+		items[i] = sgn.items[i].value
 	}
 
 	return items
 }
 
-func (sgn spatialGridNode[T]) Insert(item T) spatialGridNode[T] {
+func (sgn spatialGridNode[T]) Insert(item T, bounds mosaic.Rectangle) spatialGridNode[T] {
+	weight := sgn.bounds.AreaOfOverlap(bounds)
+
 	sgn.items = append(
 		sgn.items,
-		item,
+		newSpatialGridNodeItem(item, bounds, weight),
 	)
+	sgn.weight += weight
+
 	return sgn
 }
 
 func (sgn spatialGridNode[T]) Delete(item T) spatialGridNode[T] {
 	for i := 0; i < len(sgn.items); i++ {
-		if sgn.items[i] != item {
+		if sgn.items[i].value != item {
 			continue
 		}
+		sgn.weight -= sgn.items[i].weight
 		sgn.items[i] = sgn.items[len(sgn.items)-1]
 		sgn.items = sgn.items[:len(sgn.items)-1]
 	}
@@ -270,30 +375,12 @@ func (sgn spatialGridNode[T]) Delete(item T) spatialGridNode[T] {
 	return sgn
 }
 
-func (sgn *SpatialGrid[T]) WalkGrid(v, w mosaic.Vector) []mosaic.Vector {
-	delta := w.Subtract(v)
-	nX, nY := math.Abs(delta.X), math.Abs(delta.Y)
-	signX, signY := 1.0, 1.0
-	if delta.X <= 0 {
-		signX = -1
-	}
-	if delta.Y <= 0 {
-		signY = -1
-	}
-	vector := v.Clone()
-	vectors := []mosaic.Vector{vector.Clone()}
-
-	i, j := 0.0, 0.0
-	for i < nX || j < nY {
-		if (1+2*i)*nY < (1+2*j)*nX {
-			vector.X += signX
-			i++
-		} else {
-			vector.Y += signY
-			j++
-		}
-		vectors = append(vectors, vector.Clone())
+func newSpatialGridNodeItem[T comparable](value T, bounds mosaic.Rectangle, weight float64) spatialGridNodeItem[T] {
+	sgni := spatialGridNodeItem[T]{
+		value:  value,
+		bounds: bounds,
+		weight: weight,
 	}
 
-	return vectors
+	return sgni
 }
