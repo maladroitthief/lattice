@@ -16,8 +16,9 @@ func Test_spatial_grid_Insert(t *testing.T) {
 		size float64
 	}
 	type params struct {
-		item   int
-		bounds mosaic.Rectangle
+		item       int
+		bounds     mosaic.Rectangle
+		multiplier float64
 	}
 	type wants struct {
 		x    int
@@ -34,10 +35,10 @@ func Test_spatial_grid_Insert(t *testing.T) {
 			name:   "single insert",
 			fields: fields{x: 4, y: 4, size: 8},
 			params: []params{
-				{item: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 4, Y: 4}, 2, 2)},
-				{item: 2, bounds: mosaic.NewRectangle(mosaic.Vector{X: 12, Y: 12}, 2, 2)},
-				{item: 3, bounds: mosaic.NewRectangle(mosaic.Vector{X: 20, Y: 20}, 2, 2)},
-				{item: 4, bounds: mosaic.NewRectangle(mosaic.Vector{X: 28, Y: 28}, 2, 2)},
+				{item: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 4, Y: 4}, 2, 2), multiplier: 1.0},
+				{item: 2, bounds: mosaic.NewRectangle(mosaic.Vector{X: 12, Y: 12}, 2, 2), multiplier: 1.0},
+				{item: 3, bounds: mosaic.NewRectangle(mosaic.Vector{X: 20, Y: 20}, 2, 2), multiplier: 1.0},
+				{item: 4, bounds: mosaic.NewRectangle(mosaic.Vector{X: 28, Y: 28}, 2, 2), multiplier: 1.0},
 			},
 			wants: []wants{
 				{x: 0, y: 0, item: 1},
@@ -51,7 +52,7 @@ func Test_spatial_grid_Insert(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			sg := lattice.NewSpatialGrid[int](tt.fields.x, tt.fields.y, tt.fields.size)
 			for _, param := range tt.params {
-				sg.Insert(param.item, param.bounds)
+				sg.Insert(param.item, param.bounds, param.multiplier)
 			}
 
 			for _, want := range tt.wants {
@@ -66,8 +67,9 @@ func Test_spatial_grid_Insert(t *testing.T) {
 
 func Test_spatial_grid_Search(t *testing.T) {
 	type item struct {
-		value  int
-		bounds mosaic.Rectangle
+		value      int
+		bounds     mosaic.Rectangle
+		multiplier float64
 	}
 	type fields struct {
 		x     int
@@ -96,10 +98,10 @@ func Test_spatial_grid_Search(t *testing.T) {
 				y:    4,
 				size: 8,
 				items: []item{
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 4, Y: 4}, 2, 2)},
-					{value: 2, bounds: mosaic.NewRectangle(mosaic.Vector{X: 12, Y: 12}, 2, 2)},
-					{value: 3, bounds: mosaic.NewRectangle(mosaic.Vector{X: 20, Y: 20}, 2, 2)},
-					{value: 4, bounds: mosaic.NewRectangle(mosaic.Vector{X: 28, Y: 28}, 2, 2)},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 4, Y: 4}, 2, 2), multiplier: 1.0},
+					{value: 2, bounds: mosaic.NewRectangle(mosaic.Vector{X: 12, Y: 12}, 2, 2), multiplier: 1.0},
+					{value: 3, bounds: mosaic.NewRectangle(mosaic.Vector{X: 20, Y: 20}, 2, 2), multiplier: 1.0},
+					{value: 4, bounds: mosaic.NewRectangle(mosaic.Vector{X: 28, Y: 28}, 2, 2), multiplier: 1.0},
 				},
 			},
 			params: params{
@@ -118,10 +120,10 @@ func Test_spatial_grid_Search(t *testing.T) {
 				y:    32,
 				size: 8,
 				items: []item{
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 4, Y: 4}, 2, 2)},
-					{value: 2, bounds: mosaic.NewRectangle(mosaic.Vector{X: 12, Y: 12}, 2, 2)},
-					{value: 3, bounds: mosaic.NewRectangle(mosaic.Vector{X: 20, Y: 20}, 2, 2)},
-					{value: 4, bounds: mosaic.NewRectangle(mosaic.Vector{X: 28, Y: 28}, 2, 2)},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 4, Y: 4}, 2, 2), multiplier: 1.0},
+					{value: 2, bounds: mosaic.NewRectangle(mosaic.Vector{X: 12, Y: 12}, 2, 2), multiplier: 1.0},
+					{value: 3, bounds: mosaic.NewRectangle(mosaic.Vector{X: 20, Y: 20}, 2, 2), multiplier: 1.0},
+					{value: 4, bounds: mosaic.NewRectangle(mosaic.Vector{X: 28, Y: 28}, 2, 2), multiplier: 1.0},
 				},
 			},
 			params: params{
@@ -140,10 +142,10 @@ func Test_spatial_grid_Search(t *testing.T) {
 				y:    32,
 				size: 8,
 				items: []item{
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 4, Y: 4}, 2, 2)},
-					{value: 2, bounds: mosaic.NewRectangle(mosaic.Vector{X: 12, Y: 12}, 2, 2)},
-					{value: 3, bounds: mosaic.NewRectangle(mosaic.Vector{X: 20, Y: 20}, 2, 2)},
-					{value: 4, bounds: mosaic.NewRectangle(mosaic.Vector{X: 28, Y: 28}, 2, 2)},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 4, Y: 4}, 2, 2), multiplier: 1.0},
+					{value: 2, bounds: mosaic.NewRectangle(mosaic.Vector{X: 12, Y: 12}, 2, 2), multiplier: 1.0},
+					{value: 3, bounds: mosaic.NewRectangle(mosaic.Vector{X: 20, Y: 20}, 2, 2), multiplier: 1.0},
+					{value: 4, bounds: mosaic.NewRectangle(mosaic.Vector{X: 28, Y: 28}, 2, 2), multiplier: 1.0},
 				},
 			},
 			params: params{
@@ -160,7 +162,7 @@ func Test_spatial_grid_Search(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			sg := lattice.NewSpatialGrid[int](tt.fields.x, tt.fields.y, tt.fields.size)
 			for _, item := range tt.fields.items {
-				sg.Insert(item.value, item.bounds)
+				sg.Insert(item.value, item.bounds, item.multiplier)
 			}
 
 			got := []int{}
@@ -183,8 +185,9 @@ func Test_spatial_grid_Search(t *testing.T) {
 
 func Test_spatial_grid_WeightedSearch(t *testing.T) {
 	type item struct {
-		value  int
-		bounds mosaic.Rectangle
+		value      int
+		bounds     mosaic.Rectangle
+		multiplier float64
 	}
 	type fields struct {
 		x     int
@@ -255,8 +258,8 @@ func Test_spatial_grid_WeightedSearch(t *testing.T) {
 				y:    4,
 				size: 10,
 				items: []item{
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 15, Y: 5}, 8, 8)},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 25, Y: 5}, 8, 8)},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 15, Y: 5}, 8, 8), multiplier: 1.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 25, Y: 5}, 8, 8), multiplier: 1.0},
 				},
 			},
 			params: params{
@@ -280,7 +283,7 @@ func Test_spatial_grid_WeightedSearch(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			sg := lattice.NewSpatialGrid[int](tt.fields.x, tt.fields.y, tt.fields.size)
 			for _, item := range tt.fields.items {
-				sg.Insert(item.value, item.bounds)
+				sg.Insert(item.value, item.bounds, item.multiplier)
 			}
 
 			got, err := sg.WeightedSearch(tt.params.start, tt.params.end)

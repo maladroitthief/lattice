@@ -27,9 +27,10 @@ type (
 	}
 
 	spatialGridNodeItem[T comparable] struct {
-		value  T
-		bounds mosaic.Rectangle
-		weight float64
+		value      T
+		bounds     mosaic.Rectangle
+		multiplier float64
+		weight     float64
 	}
 )
 
@@ -81,7 +82,7 @@ func (sg *SpatialGrid[T]) Size() int {
 	return size
 }
 
-func (sg *SpatialGrid[T]) Insert(val T, bounds mosaic.Rectangle) {
+func (sg *SpatialGrid[T]) Insert(val T, bounds mosaic.Rectangle, multiplier float64) {
 	sg.nodesMu.Lock()
 	defer sg.nodesMu.Unlock()
 
@@ -91,14 +92,14 @@ func (sg *SpatialGrid[T]) Insert(val T, bounds mosaic.Rectangle) {
 
 	for xMin, xMax := xMinIndex, xMaxIndex; xMin <= xMax; xMin++ {
 		for yMin, yMax := yMinIndex, yMaxIndex; yMin <= yMax; yMin++ {
-			sg.Nodes[xMin][yMin] = sg.Nodes[xMin][yMin].Insert(val, bounds)
+			sg.Nodes[xMin][yMin] = sg.Nodes[xMin][yMin].Insert(val, bounds, multiplier)
 		}
 	}
 }
 
-func (sg *SpatialGrid[T]) Update(val T, oldBounds, newBounds mosaic.Rectangle) {
+func (sg *SpatialGrid[T]) Update(val T, oldBounds, newBounds mosaic.Rectangle, multiplier float64) {
 	sg.Delete(val, oldBounds)
-	sg.Insert(val, newBounds)
+	sg.Insert(val, newBounds, multiplier)
 }
 
 func (sg *SpatialGrid[T]) Delete(val T, bounds mosaic.Rectangle) {
@@ -350,12 +351,12 @@ func (sgn spatialGridNode[T]) Items() []T {
 	return items
 }
 
-func (sgn spatialGridNode[T]) Insert(item T, bounds mosaic.Rectangle) spatialGridNode[T] {
-	weight := sgn.bounds.AreaOfOverlap(bounds)
+func (sgn spatialGridNode[T]) Insert(item T, bounds mosaic.Rectangle, multiplier float64) spatialGridNode[T] {
+	weight := sgn.bounds.AreaOfOverlap(bounds) * multiplier
 
 	sgn.items = append(
 		sgn.items,
-		newSpatialGridNodeItem(item, bounds, weight),
+		newSpatialGridNodeItem(item, bounds, weight, multiplier),
 	)
 	sgn.weight += weight
 
@@ -375,11 +376,12 @@ func (sgn spatialGridNode[T]) Delete(item T) spatialGridNode[T] {
 	return sgn
 }
 
-func newSpatialGridNodeItem[T comparable](value T, bounds mosaic.Rectangle, weight float64) spatialGridNodeItem[T] {
+func newSpatialGridNodeItem[T comparable](value T, bounds mosaic.Rectangle, weight float64, multiplier float64) spatialGridNodeItem[T] {
 	sgni := spatialGridNodeItem[T]{
-		value:  value,
-		bounds: bounds,
-		weight: weight,
+		value:      value,
+		bounds:     bounds,
+		multiplier: multiplier,
+		weight:     weight,
 	}
 
 	return sgni
