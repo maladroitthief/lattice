@@ -278,10 +278,61 @@ func Test_spatial_grid_WeightedSearch(t *testing.T) {
 				err: nil,
 			},
 		},
+		{
+			name: "long path with weighted obstacles",
+			fields: fields{
+				x:    8,
+				y:    8,
+				size: 32,
+				items: []item{
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 48, Y: 80}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 48, Y: 112}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 48, Y: 144}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 80, Y: 48}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 112, Y: 48}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 176, Y: 48}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 112, Y: 80}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 176, Y: 80}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 112, Y: 112}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 208, Y: 112}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 144, Y: 144}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 208, Y: 144}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 144, Y: 176}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 208, Y: 176}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 144, Y: 208}, 32, 32), multiplier: 10.0},
+				},
+			},
+			params: params{
+				start: mosaic.NewVector(48, 48),
+				end:   mosaic.NewVector(208, 208),
+			},
+			want: want{
+				path: []mosaic.Vector{
+					{X: 48, Y: 48},
+					{X: 48, Y: 16},
+					{X: 80, Y: 16},
+					{X: 112, Y: 16},
+					{X: 144, Y: 16},
+					{X: 144, Y: 48},
+					{X: 144, Y: 80},
+					{X: 144, Y: 112},
+					{X: 176, Y: 112},
+					{X: 176, Y: 144},
+					{X: 176, Y: 176},
+					{X: 176, Y: 208},
+					{X: 208, Y: 208},
+				},
+				err: nil,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			sg := lattice.NewSpatialGrid[int](tt.fields.x, tt.fields.y, tt.fields.size)
+			for _, item := range tt.fields.items {
+				sg.Insert(item.value, item.bounds, item.multiplier)
+			}
+			sg.Drop()
 			for _, item := range tt.fields.items {
 				sg.Insert(item.value, item.bounds, item.multiplier)
 			}

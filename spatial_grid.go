@@ -146,11 +146,22 @@ func (sg *SpatialGrid[T]) Drop() {
 	sg.nodesMu.Lock()
 	defer sg.nodesMu.Unlock()
 
-	for iX := range sg.Nodes {
-		sg.Nodes[iX] = make([]spatialGridNode[T], sg.SizeY)
+	nodes := make([][]spatialGridNode[T], sg.SizeX)
+	for iX := range nodes {
+		nodes[iX] = make([]spatialGridNode[T], sg.SizeY)
 		for iY := range sg.SizeY {
-			sg.Nodes[iX][iY].x = iX
-			sg.Nodes[iX][iY].y = iY
+			nodes[iX][iY] = newSpatialGridNode[T](
+				iX,
+				iY,
+				mosaic.NewRectangle(
+					mosaic.NewVector(
+						(float64(iX)*sg.ChunkSize)+sg.ChunkSize/2,
+						(float64(iY)*sg.ChunkSize)+sg.ChunkSize/2,
+					),
+					sg.ChunkSize,
+					sg.ChunkSize,
+				),
+			)
 		}
 	}
 }
