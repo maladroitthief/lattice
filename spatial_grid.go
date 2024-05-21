@@ -270,7 +270,7 @@ func (sg *SpatialGrid[T]) Search(
 	return nil
 }
 
-func (sg *SpatialGrid[T]) WeightedSearch(start, end mosaic.Vector) ([]mosaic.Vector, error) {
+func (sg *SpatialGrid[T]) WeightedSearch(start, end mosaic.Vector, maxDepth int) ([]mosaic.Vector, error) {
 	sg.nodesMu.RLock()
 	defer sg.nodesMu.RUnlock()
 
@@ -293,35 +293,44 @@ func (sg *SpatialGrid[T]) WeightedSearch(start, end mosaic.Vector) ([]mosaic.Vec
 	pq := caravan.NewPriorityQueue[spatialGridNode[T]](true)
 	pq.Enqueue(startNode, 0)
 
+	currentDepth := 0
 	for pq.Len() > 0 {
-		currentNode, err := pq.Dequeue()
-		if err != nil {
-			return nil, err
+		if currentDepth > maxDepth {
+			return []mosaic.Vector{}, ErrMaxDepthReached
 		}
 
-		if currentNode.x == endNode.x && currentNode.y == endNode.y {
-			break
-		}
-
-		for _, nextNode := range sg.Edges(currentNode) {
-			newCost := costs[index{currentNode.x, currentNode.y}] + nextNode.weight
-			oldCost, ok := costs[index{nextNode.x, nextNode.y}]
-			if ok && newCost >= oldCost {
-				continue
+		nodesAtDepth := pq.Len()
+		for i := 0; i < nodesAtDepth; i++ {
+			currentNode, err := pq.Dequeue()
+			if err != nil {
+				return []mosaic.Vector{}, err
 			}
 
-			costs[index{nextNode.x, nextNode.y}] = newCost
-			priority := newCost + heuristic(nextNode, endNode)
-			pq.Enqueue(nextNode, int(priority))
-			cameFrom[index{nextNode.x, nextNode.y}] = currentNode
+			if currentNode.x == endNode.x && currentNode.y == endNode.y {
+				break
+			}
+
+			for _, nextNode := range sg.Edges(currentNode) {
+				newCost := costs[index{currentNode.x, currentNode.y}] + nextNode.weight
+				oldCost, ok := costs[index{nextNode.x, nextNode.y}]
+				if ok && newCost >= oldCost {
+					continue
+				}
+
+				costs[index{nextNode.x, nextNode.y}] = newCost
+				priority := newCost + heuristic(nextNode, endNode)
+				pq.Enqueue(nextNode, int(priority))
+				cameFrom[index{nextNode.x, nextNode.y}] = currentNode
+			}
 		}
+		currentDepth++
 	}
 
 	pathNodes := []spatialGridNode[T]{}
 	currentNode := endNode
 	_, ok := cameFrom[index{endNode.x, endNode.y}]
 	if !ok {
-		return nil, ErrPathNotFound
+		return []mosaic.Vector{}, ErrPathNotFound
 	}
 
 	for (index{currentNode.x, currentNode.y} != index{startNode.x, startNode.y}) {

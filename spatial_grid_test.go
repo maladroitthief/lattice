@@ -198,6 +198,7 @@ func Test_spatial_grid_WeightedSearch(t *testing.T) {
 	type params struct {
 		start mosaic.Vector
 		end   mosaic.Vector
+		depth int
 	}
 	type want struct {
 		path []mosaic.Vector
@@ -220,6 +221,7 @@ func Test_spatial_grid_WeightedSearch(t *testing.T) {
 			params: params{
 				start: mosaic.NewVector(5, 5),
 				end:   mosaic.NewVector(10, 5),
+				depth: 10,
 			},
 			want: want{
 				path: []mosaic.Vector{
@@ -240,6 +242,7 @@ func Test_spatial_grid_WeightedSearch(t *testing.T) {
 			params: params{
 				start: mosaic.NewVector(5, 5),
 				end:   mosaic.NewVector(35, 5),
+				depth: 10,
 			},
 			want: want{
 				path: []mosaic.Vector{
@@ -265,6 +268,7 @@ func Test_spatial_grid_WeightedSearch(t *testing.T) {
 			params: params{
 				start: mosaic.NewVector(5, 5),
 				end:   mosaic.NewVector(35, 5),
+				depth: 10,
 			},
 			want: want{
 				path: []mosaic.Vector{
@@ -305,6 +309,7 @@ func Test_spatial_grid_WeightedSearch(t *testing.T) {
 			params: params{
 				start: mosaic.NewVector(48, 48),
 				end:   mosaic.NewVector(208, 208),
+				depth: 10,
 			},
 			want: want{
 				path: []mosaic.Vector{
@@ -337,7 +342,7 @@ func Test_spatial_grid_WeightedSearch(t *testing.T) {
 				sg.Insert(item.value, item.bounds, item.multiplier)
 			}
 
-			got, err := sg.WeightedSearch(tt.params.start, tt.params.end)
+			got, err := sg.WeightedSearch(tt.params.start, tt.params.end, tt.params.depth)
 
 			if err != tt.want.err {
 				t.Error(
