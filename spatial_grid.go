@@ -7,6 +7,7 @@ import (
 
 	"github.com/maladroitthief/caravan"
 	"github.com/maladroitthief/mosaic"
+	"golang.org/x/exp/maps"
 )
 
 type (
@@ -16,6 +17,7 @@ type (
 		SizeX     int
 		SizeY     int
 		ChunkSize float64
+		itemCount int
 	}
 
 	spatialGridNode[T comparable] struct {
@@ -23,7 +25,7 @@ type (
 		y      int
 		bounds mosaic.Rectangle
 		weight float64
-		items  []spatialGridNodeItem[T]
+		Items  []spatialGridNodeItem[T]
 	}
 
 	spatialGridNodeItem[T comparable] struct {
@@ -69,32 +71,16 @@ func NewSpatialGrid[T comparable](x, y int, size float64) *SpatialGrid[T] {
 }
 
 func (sg *SpatialGrid[T]) Size() int {
-	sg.nodesMu.RLock()
-	defer sg.nodesMu.RUnlock()
-
-	size := 0
-	for x := range sg.Nodes {
-		for y := range sg.Nodes[x] {
-			size += len(sg.Nodes[x][y].items)
-		}
-	}
-
-	return size
+	return sg.itemCount
 }
 
 func (sg *SpatialGrid[T]) Insert(val T, bounds mosaic.Rectangle, multiplier float64) {
 	sg.nodesMu.Lock()
 	defer sg.nodesMu.Unlock()
 
-	minPoint, maxPoint := bounds.MinPoint(), bounds.MaxPoint()
-	xMinIndex, yMinIndex := sg.Location(minPoint.X, minPoint.Y)
-	xMaxIndex, yMaxIndex := sg.Location(maxPoint.X, maxPoint.Y)
-
-	for xMin, xMax := xMinIndex, xMaxIndex; xMin <= xMax; xMin++ {
-		for yMin, yMax := yMinIndex, yMaxIndex; yMin <= yMax; yMin++ {
-			sg.Nodes[xMin][yMin] = sg.Nodes[xMin][yMin].Insert(val, bounds, multiplier)
-		}
-	}
+	x, y := sg.Location(bounds.Position.X, bounds.Position.Y)
+	sg.Nodes[x][y] = sg.Nodes[x][y].Insert(val, bounds, multiplier)
+	sg.itemCount++
 }
 
 func (sg *SpatialGrid[T]) Update(val T, oldBounds, newBounds mosaic.Rectangle, multiplier float64) {
@@ -106,15 +92,10 @@ func (sg *SpatialGrid[T]) Delete(val T, bounds mosaic.Rectangle) {
 	sg.nodesMu.Lock()
 	defer sg.nodesMu.Unlock()
 
-	minPoint, maxPoint := bounds.MinPoint(), bounds.MaxPoint()
-	xMinIndex, yMinIndex := sg.Location(minPoint.X, minPoint.Y)
-	xMaxIndex, yMaxIndex := sg.Location(maxPoint.X, maxPoint.Y)
+	x, y := sg.Location(bounds.Position.X, bounds.Position.Y)
+	sg.Nodes[x][y] = sg.Nodes[x][y].Delete(val)
 
-	for x, xn := xMinIndex, xMaxIndex; x <= xn; x++ {
-		for y, yn := yMinIndex, yMaxIndex; y <= yn; y++ {
-			sg.Nodes[x][y] = sg.Nodes[x][y].Delete(val)
-		}
-	}
+	sg.itemCount--
 }
 
 func (sg *SpatialGrid[T]) FindNear(bounds mosaic.Rectangle) []T {
@@ -122,24 +103,19 @@ func (sg *SpatialGrid[T]) FindNear(bounds mosaic.Rectangle) []T {
 	defer sg.nodesMu.RUnlock()
 
 	set := map[T]struct{}{}
-	items := []T{}
 	minPoint, maxPoint := bounds.MinPoint(), bounds.MaxPoint()
 	xMinIndex, yMinIndex := sg.Location(minPoint.X, minPoint.Y)
 	xMaxIndex, yMaxIndex := sg.Location(maxPoint.X, maxPoint.Y)
 
 	for x, xn := xMinIndex, xMaxIndex; x <= xn; x++ {
 		for y, yn := yMinIndex, yMaxIndex; y <= yn; y++ {
-			for _, item := range sg.Nodes[x][y].Items() {
-				_, ok := set[item]
-				if !ok {
-					set[item] = struct{}{}
-					items = append(items, item)
-				}
+			for _, item := range sg.Nodes[x][y].Items {
+				set[item.value] = struct{}{}
 			}
 		}
 	}
 
-	return items
+	return maps.Keys(set)
 }
 
 func (sg *SpatialGrid[T]) Drop() {
@@ -164,16 +140,25 @@ func (sg *SpatialGrid[T]) Drop() {
 			)
 		}
 	}
+
+	sg.itemCount = 0
 }
 
 func (sg *SpatialGrid[T]) Location(x, y float64) (xIndex, yIndex int) {
-	xIndex = int(math.Floor(x / sg.ChunkSize))
-	yIndex = int(math.Floor(y / sg.ChunkSize))
+	xIndex = int((x / sg.ChunkSize))
+	yIndex = int((y / sg.ChunkSize))
 
-	xIndex = max(xIndex, 0)
-	xIndex = min(xIndex, sg.SizeX-1)
-	yIndex = max(yIndex, 0)
-	yIndex = min(yIndex, sg.SizeY-1)
+	if xIndex < 0 {
+		xIndex = 0
+	} else if xIndex > sg.SizeX-1 {
+		xIndex = sg.SizeX - 1
+	}
+
+	if yIndex < 0 {
+		yIndex = 0
+	} else if yIndex > sg.SizeY-1 {
+		yIndex = sg.SizeY - 1
+	}
 
 	return xIndex, yIndex
 }
@@ -182,7 +167,7 @@ func (sg *SpatialGrid[T]) GetItemsAtLocation(x, y int) []T {
 	sg.nodesMu.RLock()
 	defer sg.nodesMu.RUnlock()
 
-	return sg.Nodes[x][y].Items()
+	return sg.Nodes[x][y].Values()
 }
 
 func (sg *SpatialGrid[T]) GetLocationWeight(x, y int) float64 {
@@ -250,7 +235,7 @@ func (sg *SpatialGrid[T]) Search(
 			}
 			visited[index{currentNode.x, currentNode.y}] = struct{}{}
 
-			err = process(currentNode.Items())
+			err = process(currentNode.Values())
 			if err != nil {
 				return err
 			}
@@ -290,7 +275,7 @@ func (sg *SpatialGrid[T]) WeightedSearch(start, end mosaic.Vector, maxDepth int)
 	cameFrom[index{startNode.x, startNode.y}] = startNode
 	costs := map[index]float64{}
 
-	pq := caravan.NewPriorityQueue[spatialGridNode[T]](true)
+	pq := caravan.NewPQ[spatialGridNode[T]](true)
 	pq.Enqueue(startNode, 0)
 
 	currentDepth := 0
@@ -352,7 +337,7 @@ func (sg *SpatialGrid[T]) WeightedSearch(start, end mosaic.Vector, maxDepth int)
 
 func newSpatialGridNode[T comparable](x, y int, bounds mosaic.Rectangle) spatialGridNode[T] {
 	sgn := spatialGridNode[T]{
-		items:  make([]spatialGridNodeItem[T], 0),
+		Items:  make([]spatialGridNodeItem[T], 0, 512),
 		x:      x,
 		y:      y,
 		bounds: bounds,
@@ -361,21 +346,20 @@ func newSpatialGridNode[T comparable](x, y int, bounds mosaic.Rectangle) spatial
 	return sgn
 }
 
-func (sgn spatialGridNode[T]) Items() []T {
-	items := make([]T, len(sgn.items))
-
-	for i := 0; i < len(sgn.items); i++ {
-		items[i] = sgn.items[i].value
+func (sgn spatialGridNode[T]) Values() []T {
+	values := make([]T, len(sgn.Items))
+	for i := 0; i < len(values); i++ {
+		values[i] = sgn.Items[i].value
 	}
 
-	return items
+	return values
 }
 
 func (sgn spatialGridNode[T]) Insert(item T, bounds mosaic.Rectangle, multiplier float64) spatialGridNode[T] {
 	weight := sgn.bounds.AreaOfOverlap(bounds) * multiplier
 
-	sgn.items = append(
-		sgn.items,
+	sgn.Items = append(
+		sgn.Items,
 		newSpatialGridNodeItem(item, bounds, weight, multiplier),
 	)
 	sgn.weight += weight
@@ -384,25 +368,23 @@ func (sgn spatialGridNode[T]) Insert(item T, bounds mosaic.Rectangle, multiplier
 }
 
 func (sgn spatialGridNode[T]) Delete(item T) spatialGridNode[T] {
-	for i := 0; i < len(sgn.items); i++ {
-		if sgn.items[i].value != item {
+	for i := 0; i < len(sgn.Items); i++ {
+		if sgn.Items[i].value != item {
 			continue
 		}
-		sgn.weight -= sgn.items[i].weight
-		sgn.items[i] = sgn.items[len(sgn.items)-1]
-		sgn.items = sgn.items[:len(sgn.items)-1]
+		sgn.weight -= sgn.Items[i].weight
+		sgn.Items[i] = sgn.Items[len(sgn.Items)-1]
+		sgn.Items = sgn.Items[:len(sgn.Items)-1]
 	}
 
 	return sgn
 }
 
 func newSpatialGridNodeItem[T comparable](value T, bounds mosaic.Rectangle, weight float64, multiplier float64) spatialGridNodeItem[T] {
-	sgni := spatialGridNodeItem[T]{
+	return spatialGridNodeItem[T]{
 		value:      value,
 		bounds:     bounds,
 		multiplier: multiplier,
 		weight:     weight,
 	}
-
-	return sgni
 }

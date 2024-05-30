@@ -2,11 +2,19 @@ package lattice_test
 
 import (
 	"fmt"
+	"math/rand"
 	"slices"
 	"testing"
 
 	"github.com/maladroitthief/lattice"
 	"github.com/maladroitthief/mosaic"
+)
+
+const (
+	ContainerSize = 1000000
+	GridX         = 8
+	GridY         = 8
+	GridSize      = 32.0
 )
 
 func Test_spatial_grid_Insert(t *testing.T) {
@@ -56,7 +64,7 @@ func Test_spatial_grid_Insert(t *testing.T) {
 			}
 
 			for _, want := range tt.wants {
-				got := slices.Contains(sg.Nodes[want.x][want.y].Items(), want.item)
+				got := slices.Contains(sg.Nodes[want.x][want.y].Values(), want.item)
 				if !got {
 					t.Errorf("spatialGrid.Insert() did not find what we want: %+v", want)
 				}
@@ -358,5 +366,128 @@ func Test_spatial_grid_WeightedSearch(t *testing.T) {
 				t.Error(fmt.Errorf("spatialGrid.WeightedSearch() want: %+v, got: %+v\n", tt.want.path, got))
 			}
 		})
+	}
+}
+
+func BenchmarkSpatialGridSize(b *testing.B) {
+	sg := lattice.NewSpatialGrid[int](GridX, GridY, GridSize)
+	for i := 0; i < ContainerSize; i++ {
+		x0 := float64(rand.Intn(GridX) * rand.Intn(int(GridSize)))
+		y0 := float64(rand.Intn(GridY) * rand.Intn(int(GridSize)))
+		sizeX := GridSize * rand.Float64()
+		sizeY := GridSize * rand.Float64()
+		sg.Insert(
+			rand.Int(),
+			mosaic.NewRectangle(mosaic.Vector{X: x0, Y: y0}, sizeX, sizeY),
+			rand.Float64(),
+		)
+	}
+
+	for n := 0; n < b.N; n++ {
+		sg.Size()
+	}
+}
+
+func BenchmarkSpatialGridInsert(b *testing.B) {
+	sg := lattice.NewSpatialGrid[int](GridX, GridY, GridSize)
+	for n := 0; n < b.N; n++ {
+		x0 := float64(rand.Intn(GridX) * rand.Intn(int(GridSize)))
+		y0 := float64(rand.Intn(GridY) * rand.Intn(int(GridSize)))
+		sizeX := GridSize * rand.Float64()
+		sizeY := GridSize * rand.Float64()
+		sg.Insert(
+			rand.Int(),
+			mosaic.NewRectangle(mosaic.Vector{X: x0, Y: y0}, sizeX, sizeY),
+			rand.Float64(),
+		)
+	}
+}
+
+func BenchmarkSpatialGridDelete(b *testing.B) {
+	type entity struct {
+		value  int
+		bounds mosaic.Rectangle
+	}
+
+	sg := lattice.NewSpatialGrid[int](GridX, GridY, GridSize)
+	entities := []entity{}
+	for i := 0; i < ContainerSize; i++ {
+		x0 := float64(rand.Intn(GridX) * rand.Intn(int(GridSize)))
+		y0 := float64(rand.Intn(GridY) * rand.Intn(int(GridSize)))
+		sizeX := GridSize * rand.Float64()
+		sizeY := GridSize * rand.Float64()
+
+		value := rand.Int()
+		bounds := mosaic.NewRectangle(mosaic.Vector{X: x0, Y: y0}, sizeX, sizeY)
+		sg.Insert(value, bounds, rand.Float64())
+		entities = append(entities, entity{value: value, bounds: bounds})
+	}
+
+	for n := 0; n < b.N; n++ {
+		if n < ContainerSize {
+			index := rand.Intn(len(entities))
+			entity := entities[index]
+
+			sg.Delete(entity.value, entity.bounds)
+
+			entities[index] = entities[len(entities)-1]
+			entities = entities[:len(entities)-1]
+		}
+	}
+}
+
+func BenchmarkSpatialGridFindNear(b *testing.B) {
+	sg := lattice.NewSpatialGrid[int](GridX, GridY, GridSize)
+	entities := []mosaic.Rectangle{}
+
+	for i := 0; i < ContainerSize; i++ {
+		x0 := float64(rand.Intn(GridX) * rand.Intn(int(GridSize)))
+		y0 := float64(rand.Intn(GridY) * rand.Intn(int(GridSize)))
+		sizeX := GridSize * rand.Float64()
+		sizeY := GridSize * rand.Float64()
+		bounds := mosaic.NewRectangle(mosaic.Vector{X: x0, Y: y0}, sizeX, sizeY)
+		entities = append(entities, bounds)
+
+		sg.Insert(
+			rand.Int(),
+			bounds,
+			rand.Float64(),
+		)
+	}
+
+	for n := 0; n < b.N; n++ {
+		sg.FindNear(entities[n%len(entities)])
+	}
+}
+
+func BenchmarkSpatialGridWeightedSearch(b *testing.B) {
+	sg := lattice.NewSpatialGrid[int](GridX, GridY, GridSize)
+	entities := []mosaic.Vector{}
+	for i := 0; i < ContainerSize; i++ {
+		x0 := float64(rand.Intn(GridX) * rand.Intn(int(GridSize)))
+		y0 := float64(rand.Intn(GridY) * rand.Intn(int(GridSize)))
+		sizeX := GridSize * rand.Float64()
+		sizeY := GridSize * rand.Float64()
+		entities = append(
+			entities,
+			mosaic.NewVector(
+				float64(rand.Intn(GridX)*rand.Intn(int(GridSize))),
+				float64(rand.Intn(GridY)*rand.Intn(int(GridSize))),
+			),
+		)
+
+		sg.Insert(
+			rand.Int(),
+			mosaic.NewRectangle(mosaic.Vector{X: x0, Y: y0}, sizeX, sizeY),
+			rand.Float64(),
+		)
+	}
+
+	for n := 0; n < b.N; n++ {
+		sg.WeightedSearch(
+			entities[n%len(entities)],
+			entities[n%len(entities)],
+			10,
+		)
 	}
 }

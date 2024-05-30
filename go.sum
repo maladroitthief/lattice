@@ -1,4 +1,6 @@
-github.com/maladroitthief/caravan v1.3.0 h1:cQzVK2WdrWxSmhYbVTdrOqmnApm3QyDzMQM4w49VtCE=
-github.com/maladroitthief/caravan v1.3.0/go.mod h1:1hPPX2GmGAYdOH6+La0QLXL27igweQXohOfNrqYwnoU=
+github.com/maladroitthief/caravan v1.4.2 h1:5+nfCzESqNgYb/5Xp+eqXuYD9Bi89ZWISkj7+seav9o=
+github.com/maladroitthief/caravan v1.4.2/go.mod h1:1hPPX2GmGAYdOH6+La0QLXL27igweQXohOfNrqYwnoU=
 github.com/maladroitthief/mosaic v1.2.0 h1:NQuHZ5dTfAX6URI5c/A/BKNNwaBzJGqJPu2jl+uIoqs=
 github.com/maladroitthief/mosaic v1.2.0/go.mod h1:mU6Rxi6/J/UZ7ud4K9pqhKDX1RIKi9J0uhj40Kt5qvw=
+golang.org/x/exp v0.0.0-20240529005216-23cca8864a10 h1:vpzMC/iZhYFAjJzHU0Cfuq+w1vLLsF2vLkDrPjzKYck=
+golang.org/x/exp v0.0.0-20240529005216-23cca8864a10/go.mod h1:XtvwrStGgqGPLc4cjQfWqZHG1YFdYs6swckp8vpsjnc=
