@@ -141,6 +141,7 @@ func (sg *SpatialGrid[T]) Drop() {
 		}
 	}
 
+	sg.Nodes = nodes
 	sg.itemCount = 0
 }
 
@@ -336,14 +337,13 @@ func (sg *SpatialGrid[T]) WeightedSearch(start, end mosaic.Vector, maxDepth int)
 }
 
 func newSpatialGridNode[T comparable](x, y int, bounds mosaic.Rectangle) spatialGridNode[T] {
-	sgn := spatialGridNode[T]{
+	return spatialGridNode[T]{
 		Items:  make([]spatialGridNodeItem[T], 0, 512),
 		x:      x,
 		y:      y,
 		bounds: bounds,
+		weight: 0,
 	}
-
-	return sgn
 }
 
 func (sgn spatialGridNode[T]) Values() []T {
@@ -372,7 +372,7 @@ func (sgn spatialGridNode[T]) Delete(item T) spatialGridNode[T] {
 		if sgn.Items[i].value != item {
 			continue
 		}
-		sgn.weight -= sgn.Items[i].weight
+		sgn.weight = sgn.weight - sgn.Items[i].weight
 		sgn.Items[i] = sgn.Items[len(sgn.Items)-1]
 		sgn.Items = sgn.Items[:len(sgn.Items)-1]
 	}

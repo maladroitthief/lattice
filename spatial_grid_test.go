@@ -73,6 +73,79 @@ func Test_spatial_grid_Insert(t *testing.T) {
 	}
 }
 
+func Test_spatial_grid_GetLocationWeight(t *testing.T) {
+	type fields struct {
+		x    int
+		y    int
+		size float64
+	}
+	type params struct {
+		item       int
+		bounds     mosaic.Rectangle
+		multiplier float64
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		params []params
+		wants  []float64
+	}{
+		{
+			name:   "base case",
+			fields: fields{x: 4, y: 4, size: 8},
+			params: []params{
+				{item: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 4, Y: 4}, 2, 2), multiplier: 1.0},
+				{item: 2, bounds: mosaic.NewRectangle(mosaic.Vector{X: 12, Y: 12}, 2, 2), multiplier: 1.0},
+				{item: 3, bounds: mosaic.NewRectangle(mosaic.Vector{X: 20, Y: 20}, 2, 2), multiplier: 1.0},
+				{item: 4, bounds: mosaic.NewRectangle(mosaic.Vector{X: 28, Y: 28}, 2, 2), multiplier: 1.0},
+			},
+			wants: []float64{
+				4.0,
+				0.0,
+				4.0,
+				0.0,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sg := lattice.NewSpatialGrid[int](tt.fields.x, tt.fields.y, tt.fields.size)
+			for _, param := range tt.params {
+				sg.Insert(param.item, param.bounds, param.multiplier)
+			}
+
+			got := sg.GetLocationWeight(0, 0)
+			want := tt.wants[0]
+			if want != got {
+				t.Error(fmt.Errorf("spatialGrid.GetLocationWeight() want: %+v, got: %+v\n", want, got))
+			}
+
+			sg.Drop()
+			got = sg.GetLocationWeight(0, 0)
+			want = tt.wants[1]
+			if want != got {
+				t.Error(fmt.Errorf("spatialGrid.GetLocationWeight() [after drop] want: %+v, got: %+v\n", want, got))
+			}
+
+			for _, param := range tt.params {
+				sg.Insert(param.item, param.bounds, param.multiplier)
+			}
+			got = sg.GetLocationWeight(0, 0)
+			want = tt.wants[2]
+			if want != got {
+				t.Error(fmt.Errorf("spatialGrid.GetLocationWeight() [after restore] want: %+v, got: %+v\n", want, got))
+			}
+
+			sg.Delete(tt.params[0].item, tt.params[0].bounds)
+			got = sg.GetLocationWeight(0, 0)
+			want = tt.wants[3]
+			if want != got {
+				t.Error(fmt.Errorf("spatialGrid.GetLocationWeight() [after delete] want: %+v, got: %+v\n", want, got))
+			}
+		})
+	}
+}
+
 func Test_spatial_grid_Search(t *testing.T) {
 	type item struct {
 		value      int
