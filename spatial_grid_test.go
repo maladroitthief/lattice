@@ -238,6 +238,33 @@ func Test_spatial_grid_Search(t *testing.T) {
 				items: []int{1, 2},
 			},
 		},
+		{
+			name: "long path with weighted obstacles",
+			fields: fields{
+				x:    8,
+				y:    8,
+				size: 32,
+				items: []item{
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 144, Y: 144}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 176, Y: 144}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 144, Y: 176}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 112, Y: 144}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 144, Y: 112}, 32, 32), multiplier: 10.0},
+					{value: 0, bounds: mosaic.NewRectangle(mosaic.Vector{X: 112, Y: 112}, 32, 32), multiplier: 10.0},
+					{value: 0, bounds: mosaic.NewRectangle(mosaic.Vector{X: 176, Y: 176}, 32, 32), multiplier: 10.0},
+					{value: 0, bounds: mosaic.NewRectangle(mosaic.Vector{X: 112, Y: 176}, 32, 32), multiplier: 10.0},
+					{value: 0, bounds: mosaic.NewRectangle(mosaic.Vector{X: 176, Y: 112}, 32, 32), multiplier: 10.0},
+				},
+			},
+			params: params{
+				x:     128,
+				y:     128,
+				depth: 1,
+			},
+			want: want{
+				items: []int{1, 1, 1, 1, 1},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -390,7 +417,7 @@ func Test_spatial_grid_WeightedSearch(t *testing.T) {
 			params: params{
 				start: mosaic.NewVector(48, 48),
 				end:   mosaic.NewVector(208, 208),
-				depth: 10,
+				depth: 64,
 			},
 			want: want{
 				path: []mosaic.Vector{
@@ -409,6 +436,40 @@ func Test_spatial_grid_WeightedSearch(t *testing.T) {
 					{X: 208, Y: 208},
 				},
 				err: nil,
+			},
+		},
+		{
+			name: "long path with low depth",
+			fields: fields{
+				x:    8,
+				y:    8,
+				size: 32,
+				items: []item{
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 48, Y: 80}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 48, Y: 112}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 48, Y: 144}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 80, Y: 48}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 112, Y: 48}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 176, Y: 48}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 112, Y: 80}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 176, Y: 80}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 112, Y: 112}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 208, Y: 112}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 144, Y: 144}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 208, Y: 144}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 144, Y: 176}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 208, Y: 176}, 32, 32), multiplier: 10.0},
+					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 144, Y: 208}, 32, 32), multiplier: 10.0},
+				},
+			},
+			params: params{
+				start: mosaic.NewVector(48, 48),
+				end:   mosaic.NewVector(208, 208),
+				depth: 5,
+			},
+			want: want{
+				path: []mosaic.Vector{},
+				err:  lattice.ErrMaxDepthReached,
 			},
 		},
 	}

@@ -285,29 +285,26 @@ func (sg *SpatialGrid[T]) WeightedSearch(start, end mosaic.Vector, maxDepth int)
 			return []mosaic.Vector{}, ErrMaxDepthReached
 		}
 
-		nodesAtDepth := pq.Len()
-		for i := 0; i < nodesAtDepth; i++ {
-			currentNode, err := pq.Dequeue()
-			if err != nil {
-				return []mosaic.Vector{}, err
+		currentNode, err := pq.Dequeue()
+		if err != nil {
+			return []mosaic.Vector{}, err
+		}
+
+		if currentNode.x == endNode.x && currentNode.y == endNode.y {
+			break
+		}
+
+		for _, nextNode := range sg.Edges(currentNode) {
+			newCost := costs[index{currentNode.x, currentNode.y}] + nextNode.weight
+			oldCost, ok := costs[index{nextNode.x, nextNode.y}]
+			if ok && newCost >= oldCost {
+				continue
 			}
 
-			if currentNode.x == endNode.x && currentNode.y == endNode.y {
-				break
-			}
-
-			for _, nextNode := range sg.Edges(currentNode) {
-				newCost := costs[index{currentNode.x, currentNode.y}] + nextNode.weight
-				oldCost, ok := costs[index{nextNode.x, nextNode.y}]
-				if ok && newCost >= oldCost {
-					continue
-				}
-
-				costs[index{nextNode.x, nextNode.y}] = newCost
-				priority := newCost + heuristic(nextNode, endNode)
-				pq.Enqueue(nextNode, int(priority))
-				cameFrom[index{nextNode.x, nextNode.y}] = currentNode
-			}
+			costs[index{nextNode.x, nextNode.y}] = newCost
+			priority := newCost + heuristic(nextNode, endNode)
+			pq.Enqueue(nextNode, int(priority))
+			cameFrom[index{nextNode.x, nextNode.y}] = currentNode
 		}
 		currentDepth++
 	}
