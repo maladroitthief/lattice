@@ -307,7 +307,7 @@ func (sg *SpatialGrid[T]) WeightedSearch(start, end mosaic.Vector, maxDepth int)
 
 		edges := sg.Edges(currentNode)
 		for i := 0; i < len(edges); i++ {
-			newCost := costs[index{currentNode.x, currentNode.y}] + edges[i].weight + heuristic(edges[i], endNode)
+			newCost := costs[index{currentNode.x, currentNode.y}] + edges[i].weight
 			if math.IsInf(newCost, 1) {
 				continue
 			}
@@ -325,8 +325,8 @@ func (sg *SpatialGrid[T]) WeightedSearch(start, end mosaic.Vector, maxDepth int)
 				bounds: edges[i].bounds,
 				weight: edges[i].weight,
 			}
-
-			pq.Enqueue(node, edgeCost)
+			priority := newCost + heuristic(edges[i], endNode)
+			pq.Enqueue(node, priority)
 			cameFrom[index{edges[i].x, edges[i].y}] = currentNode
 		}
 		currentDepth++
