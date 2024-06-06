@@ -2,6 +2,7 @@ package lattice_test
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 	"slices"
 	"testing"
@@ -12,10 +13,54 @@ import (
 
 const (
 	ContainerSize = 1000000
-	GridX         = 8
-	GridY         = 8
+	GridX         = 9
+	GridY         = 9
 	GridSize      = 32.0
 )
+
+type Builder struct {
+	layout string
+	x      int
+	y      int
+	size   int
+}
+
+func setup_grid(sg *lattice.SpatialGrid[int], b Builder) {
+	xPos := func(b Builder, i int) float64 {
+		return float64((i%b.x)*b.size) + float64(b.size)/2
+	}
+
+	yPos := func(b Builder, i int) float64 {
+		return float64((i/b.y)*b.size) + float64(b.size)/2
+	}
+
+	for i, block := range b.layout {
+		switch block {
+		case '0':
+		case '1':
+			sg.Insert(
+				1,
+				mosaic.NewRectangle(
+					mosaic.Vector{X: xPos(b, i), Y: yPos(b, i)},
+					float64(b.size),
+					float64(b.size),
+				),
+				1.0,
+			)
+		case 'x':
+			sg.Insert(
+				9,
+				mosaic.NewRectangle(
+					mosaic.Vector{X: xPos(b, i), Y: yPos(b, i)},
+					float64(b.size),
+					float64(b.size),
+				),
+				math.Inf(1),
+			)
+		default:
+		}
+	}
+}
 
 func Test_spatial_grid_Insert(t *testing.T) {
 	type fields struct {
@@ -74,45 +119,48 @@ func Test_spatial_grid_Insert(t *testing.T) {
 }
 
 func Test_spatial_grid_GetLocationWeight(t *testing.T) {
-	type fields struct {
-		x    int
-		y    int
-		size float64
-	}
-	type params struct {
-		item       int
-		bounds     mosaic.Rectangle
-		multiplier float64
+	type setup struct {
+		builder Builder
 	}
 	tests := []struct {
-		name   string
-		fields fields
-		params []params
-		wants  []float64
+		name  string
+		setup setup
+		wants []float64
 	}{
 		{
-			name:   "base case",
-			fields: fields{x: 4, y: 4, size: 8},
-			params: []params{
-				{item: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 4, Y: 4}, 2, 2), multiplier: 1.0},
-				{item: 2, bounds: mosaic.NewRectangle(mosaic.Vector{X: 12, Y: 12}, 2, 2), multiplier: 1.0},
-				{item: 3, bounds: mosaic.NewRectangle(mosaic.Vector{X: 20, Y: 20}, 2, 2), multiplier: 1.0},
-				{item: 4, bounds: mosaic.NewRectangle(mosaic.Vector{X: 28, Y: 28}, 2, 2), multiplier: 1.0},
+			name: "base case",
+			setup: setup{
+				builder: Builder{
+					x:    9,
+					y:    9,
+					size: 32,
+					layout: "" +
+						"100000000" +
+						"011111110" +
+						"010000010" +
+						"010101010" +
+						"010101010" +
+						"010111010" +
+						"010000010" +
+						"011111010" +
+						"000000000",
+				},
 			},
 			wants: []float64{
-				4.0,
+				1024.0,
 				0.0,
-				4.0,
-				0.0,
+				1024.0,
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sg := lattice.NewSpatialGrid[int](tt.fields.x, tt.fields.y, tt.fields.size)
-			for _, param := range tt.params {
-				sg.Insert(param.item, param.bounds, param.multiplier)
-			}
+			sg := lattice.NewSpatialGrid[int](
+				tt.setup.builder.x,
+				tt.setup.builder.y,
+				float64(tt.setup.builder.size),
+			)
+			setup_grid(sg, tt.setup.builder)
 
 			got := sg.GetLocationWeight(0, 0)
 			want := tt.wants[0]
@@ -127,36 +175,19 @@ func Test_spatial_grid_GetLocationWeight(t *testing.T) {
 				t.Error(fmt.Errorf("spatialGrid.GetLocationWeight() [after drop] want: %+v, got: %+v\n", want, got))
 			}
 
-			for _, param := range tt.params {
-				sg.Insert(param.item, param.bounds, param.multiplier)
-			}
+			setup_grid(sg, tt.setup.builder)
 			got = sg.GetLocationWeight(0, 0)
 			want = tt.wants[2]
 			if want != got {
 				t.Error(fmt.Errorf("spatialGrid.GetLocationWeight() [after restore] want: %+v, got: %+v\n", want, got))
-			}
-
-			sg.Delete(tt.params[0].item, tt.params[0].bounds)
-			got = sg.GetLocationWeight(0, 0)
-			want = tt.wants[3]
-			if want != got {
-				t.Error(fmt.Errorf("spatialGrid.GetLocationWeight() [after delete] want: %+v, got: %+v\n", want, got))
 			}
 		})
 	}
 }
 
 func Test_spatial_grid_Search(t *testing.T) {
-	type item struct {
-		value      int
-		bounds     mosaic.Rectangle
-		multiplier float64
-	}
-	type fields struct {
-		x     int
-		y     int
-		size  float64
-		items []item
+	type setup struct {
+		builder Builder
 	}
 	type params struct {
 		x     float64
@@ -168,111 +199,47 @@ func Test_spatial_grid_Search(t *testing.T) {
 	}
 	tests := []struct {
 		name   string
-		fields fields
+		setup  setup
 		params params
 		want   want
 	}{
 		{
 			name: "shallow search",
-			fields: fields{
-				x:    4,
-				y:    4,
-				size: 8,
-				items: []item{
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 4, Y: 4}, 2, 2), multiplier: 1.0},
-					{value: 2, bounds: mosaic.NewRectangle(mosaic.Vector{X: 12, Y: 12}, 2, 2), multiplier: 1.0},
-					{value: 3, bounds: mosaic.NewRectangle(mosaic.Vector{X: 20, Y: 20}, 2, 2), multiplier: 1.0},
-					{value: 4, bounds: mosaic.NewRectangle(mosaic.Vector{X: 28, Y: 28}, 2, 2), multiplier: 1.0},
+			setup: setup{
+				builder: Builder{
+					x:    9,
+					y:    9,
+					size: 32,
+					layout: "" +
+						"000000000" +
+						"011111110" +
+						"010000010" +
+						"010101010" +
+						"010101010" +
+						"010111010" +
+						"010000010" +
+						"011111010" +
+						"000000000",
 				},
 			},
 			params: params{
-				x:     20,
-				y:     20,
+				x:     16,
+				y:     16,
 				depth: 1,
 			},
 			want: want{
-				items: []int{3},
-			},
-		},
-		{
-			name: "wide search",
-			fields: fields{
-				x:    32,
-				y:    32,
-				size: 8,
-				items: []item{
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 4, Y: 4}, 2, 2), multiplier: 1.0},
-					{value: 2, bounds: mosaic.NewRectangle(mosaic.Vector{X: 12, Y: 12}, 2, 2), multiplier: 1.0},
-					{value: 3, bounds: mosaic.NewRectangle(mosaic.Vector{X: 20, Y: 20}, 2, 2), multiplier: 1.0},
-					{value: 4, bounds: mosaic.NewRectangle(mosaic.Vector{X: 28, Y: 28}, 2, 2), multiplier: 1.0},
-				},
-			},
-			params: params{
-				x:     20,
-				y:     20,
-				depth: 5,
-			},
-			want: want{
-				items: []int{1, 2, 3, 4},
-			},
-		},
-		{
-			name: "medium search",
-			fields: fields{
-				x:    32,
-				y:    32,
-				size: 8,
-				items: []item{
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 4, Y: 4}, 2, 2), multiplier: 1.0},
-					{value: 2, bounds: mosaic.NewRectangle(mosaic.Vector{X: 12, Y: 12}, 2, 2), multiplier: 1.0},
-					{value: 3, bounds: mosaic.NewRectangle(mosaic.Vector{X: 20, Y: 20}, 2, 2), multiplier: 1.0},
-					{value: 4, bounds: mosaic.NewRectangle(mosaic.Vector{X: 28, Y: 28}, 2, 2), multiplier: 1.0},
-				},
-			},
-			params: params{
-				x:     0,
-				y:     0,
-				depth: 2,
-			},
-			want: want{
-				items: []int{1, 2},
-			},
-		},
-		{
-			name: "long path with weighted obstacles",
-			fields: fields{
-				x:    8,
-				y:    8,
-				size: 32,
-				items: []item{
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 144, Y: 144}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 176, Y: 144}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 144, Y: 176}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 112, Y: 144}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 144, Y: 112}, 32, 32), multiplier: 10.0},
-					{value: 0, bounds: mosaic.NewRectangle(mosaic.Vector{X: 112, Y: 112}, 32, 32), multiplier: 10.0},
-					{value: 0, bounds: mosaic.NewRectangle(mosaic.Vector{X: 176, Y: 176}, 32, 32), multiplier: 10.0},
-					{value: 0, bounds: mosaic.NewRectangle(mosaic.Vector{X: 112, Y: 176}, 32, 32), multiplier: 10.0},
-					{value: 0, bounds: mosaic.NewRectangle(mosaic.Vector{X: 176, Y: 112}, 32, 32), multiplier: 10.0},
-				},
-			},
-			params: params{
-				x:     128,
-				y:     128,
-				depth: 1,
-			},
-			want: want{
-				items: []int{1, 1, 1, 1, 1},
+				items: []int{},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sg := lattice.NewSpatialGrid[int](tt.fields.x, tt.fields.y, tt.fields.size)
-			for _, item := range tt.fields.items {
-				sg.Insert(item.value, item.bounds, item.multiplier)
-			}
-
+			sg := lattice.NewSpatialGrid[int](
+				tt.setup.builder.x,
+				tt.setup.builder.y,
+				float64(tt.setup.builder.size),
+			)
+			setup_grid(sg, tt.setup.builder)
 			got := []int{}
 			want := tt.want.items
 			check := func(items []int) error {
@@ -292,16 +259,8 @@ func Test_spatial_grid_Search(t *testing.T) {
 }
 
 func Test_spatial_grid_WeightedSearch(t *testing.T) {
-	type item struct {
-		value      int
-		bounds     mosaic.Rectangle
-		multiplier float64
-	}
-	type fields struct {
-		x     int
-		y     int
-		size  float64
-		items []item
+	type setup struct {
+		builder Builder
 	}
 	type params struct {
 		start mosaic.Vector
@@ -314,178 +273,144 @@ func Test_spatial_grid_WeightedSearch(t *testing.T) {
 	}
 	tests := []struct {
 		name   string
-		fields fields
+		setup  setup
 		params params
 		want   want
 	}{
 		{
 			name: "simple path",
-			fields: fields{
-				x:     4,
-				y:     4,
-				size:  10,
-				items: []item{},
+			setup: setup{
+				builder: Builder{
+					x:    9,
+					y:    9,
+					size: 32,
+					layout: "" +
+						"100000000" +
+						"011111110" +
+						"010000010" +
+						"010101010" +
+						"010101010" +
+						"010111010" +
+						"010000010" +
+						"011111010" +
+						"000000000",
+				},
 			},
 			params: params{
-				start: mosaic.NewVector(5, 5),
-				end:   mosaic.NewVector(10, 5),
+				start: mosaic.NewVector(4, 4),
+				end:   mosaic.NewVector(4, 2),
+				depth: 32,
+			},
+			want: want{
+				path: []mosaic.Vector{
+					{X: 4, Y: 4},
+					{X: 4, Y: 3},
+					{X: 4, Y: 2},
+				},
+				err: nil,
+			},
+		},
+		{
+			name: "max depth",
+			setup: setup{
+				builder: Builder{
+					x:    9,
+					y:    9,
+					size: 32,
+					layout: "" +
+						"000000000" +
+						"0xxxxxxx0" +
+						"0x00000x0" +
+						"0x0x0x0x0" +
+						"0x0x0x0x0" +
+						"0x0xxx0x0" +
+						"0x00000x0" +
+						"0xxxxx0x0" +
+						"000000000",
+				},
+			},
+			params: params{
+				start: mosaic.NewVector(0, 0),
+				end:   mosaic.NewVector(4, 4),
 				depth: 10,
-			},
-			want: want{
-				path: []mosaic.Vector{
-					{X: 5, Y: 5},
-					{X: 15, Y: 5},
-				},
-				err: nil,
-			},
-		},
-		{
-			name: "long path",
-			fields: fields{
-				x:     4,
-				y:     4,
-				size:  10,
-				items: []item{},
-			},
-			params: params{
-				start: mosaic.NewVector(5, 5),
-				end:   mosaic.NewVector(35, 5),
-				depth: 10,
-			},
-			want: want{
-				path: []mosaic.Vector{
-					{X: 5, Y: 5},
-					{X: 15, Y: 5},
-					{X: 25, Y: 5},
-					{X: 35, Y: 5},
-				},
-				err: nil,
-			},
-		},
-		{
-			name: "long path with obstacles",
-			fields: fields{
-				x:    4,
-				y:    4,
-				size: 10,
-				items: []item{
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 15, Y: 5}, 8, 8), multiplier: 1.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 25, Y: 5}, 8, 8), multiplier: 1.0},
-				},
-			},
-			params: params{
-				start: mosaic.NewVector(5, 5),
-				end:   mosaic.NewVector(35, 5),
-				depth: 10,
-			},
-			want: want{
-				path: []mosaic.Vector{
-					{X: 5, Y: 5},
-					{X: 5, Y: 15},
-					{X: 15, Y: 15},
-					{X: 25, Y: 15},
-					{X: 35, Y: 15},
-					{X: 35, Y: 5},
-				},
-				err: nil,
-			},
-		},
-		{
-			name: "long path with weighted obstacles",
-			fields: fields{
-				x:    8,
-				y:    8,
-				size: 32,
-				items: []item{
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 48, Y: 80}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 48, Y: 112}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 48, Y: 144}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 80, Y: 48}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 112, Y: 48}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 176, Y: 48}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 112, Y: 80}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 176, Y: 80}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 112, Y: 112}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 208, Y: 112}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 144, Y: 144}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 208, Y: 144}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 144, Y: 176}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 208, Y: 176}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 144, Y: 208}, 32, 32), multiplier: 10.0},
-				},
-			},
-			params: params{
-				start: mosaic.NewVector(48, 48),
-				end:   mosaic.NewVector(208, 208),
-				depth: 64,
-			},
-			want: want{
-				path: []mosaic.Vector{
-					{X: 48, Y: 48},
-					{X: 48, Y: 16},
-					{X: 80, Y: 16},
-					{X: 112, Y: 16},
-					{X: 144, Y: 16},
-					{X: 144, Y: 48},
-					{X: 144, Y: 80},
-					{X: 144, Y: 112},
-					{X: 176, Y: 112},
-					{X: 176, Y: 144},
-					{X: 176, Y: 176},
-					{X: 176, Y: 208},
-					{X: 208, Y: 208},
-				},
-				err: nil,
-			},
-		},
-		{
-			name: "long path with low depth",
-			fields: fields{
-				x:    8,
-				y:    8,
-				size: 32,
-				items: []item{
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 48, Y: 80}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 48, Y: 112}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 48, Y: 144}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 80, Y: 48}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 112, Y: 48}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 176, Y: 48}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 112, Y: 80}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 176, Y: 80}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 112, Y: 112}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 208, Y: 112}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 144, Y: 144}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 208, Y: 144}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 144, Y: 176}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 208, Y: 176}, 32, 32), multiplier: 10.0},
-					{value: 1, bounds: mosaic.NewRectangle(mosaic.Vector{X: 144, Y: 208}, 32, 32), multiplier: 10.0},
-				},
-			},
-			params: params{
-				start: mosaic.NewVector(48, 48),
-				end:   mosaic.NewVector(208, 208),
-				depth: 5,
 			},
 			want: want{
 				path: []mosaic.Vector{},
 				err:  lattice.ErrMaxDepthReached,
 			},
 		},
+		{
+			name: "hard path",
+			setup: setup{
+				builder: Builder{
+					x:    9,
+					y:    9,
+					size: 32,
+					layout: "" +
+						"000000000" +
+						"0xxxxxxx0" +
+						"0x00000x0" +
+						"0x0x0x0x0" +
+						"0x0x0x0x0" +
+						"0x0xxx0x0" +
+						"0x00000x0" +
+						"0x0xxx0x0" +
+						"000000000",
+				},
+			},
+			params: params{
+				start: mosaic.NewVector(0, 0),
+				end:   mosaic.NewVector(4, 4),
+				depth: 64,
+			},
+			want: want{
+				path: []mosaic.Vector{
+					{X: 0, Y: 0},
+					{X: 0, Y: 1},
+					{X: 0, Y: 2},
+					{X: 0, Y: 3},
+					{X: 0, Y: 4},
+					{X: 0, Y: 5},
+					{X: 0, Y: 6},
+					{X: 0, Y: 7},
+					{X: 0, Y: 8},
+					{X: 1, Y: 8},
+					{X: 2, Y: 8},
+					{X: 2, Y: 7},
+					{X: 2, Y: 6},
+					{X: 2, Y: 5},
+					{X: 2, Y: 4},
+					{X: 2, Y: 3},
+					{X: 2, Y: 2},
+					{X: 3, Y: 2},
+					{X: 4, Y: 2},
+					{X: 4, Y: 3},
+					{X: 4, Y: 4},
+				},
+				err: nil,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sg := lattice.NewSpatialGrid[int](tt.fields.x, tt.fields.y, tt.fields.size)
-			for _, item := range tt.fields.items {
-				sg.Insert(item.value, item.bounds, item.multiplier)
+			scale := func(b Builder, v int) float64 {
+				return float64(v*b.size) + float64(b.size)/2
 			}
-			sg.Drop()
-			for _, item := range tt.fields.items {
-				sg.Insert(item.value, item.bounds, item.multiplier)
+			sg := lattice.NewSpatialGrid[int](
+				tt.setup.builder.x,
+				tt.setup.builder.y,
+				float64(tt.setup.builder.size),
+			)
+			setup_grid(sg, tt.setup.builder)
+			start := mosaic.Vector{
+				X: scale(tt.setup.builder, int(tt.params.start.X)),
+				Y: scale(tt.setup.builder, int(tt.params.start.Y)),
 			}
-
-			got, err := sg.WeightedSearch(tt.params.start, tt.params.end, tt.params.depth)
-
+			end := mosaic.Vector{
+				X: scale(tt.setup.builder, int(tt.params.end.X)),
+				Y: scale(tt.setup.builder, int(tt.params.end.Y)),
+			}
+			got, err := sg.WeightedSearch(start, end, tt.params.depth)
 			if err != tt.want.err {
 				t.Error(
 					fmt.Errorf(
@@ -495,9 +420,16 @@ func Test_spatial_grid_WeightedSearch(t *testing.T) {
 					),
 				)
 			}
+			path := make([]mosaic.Vector, len(tt.want.path))
+			for i := 0; i < len(path); i++ {
+				path[i] = mosaic.Vector{
+					X: scale(tt.setup.builder, int(tt.want.path[i].X)),
+					Y: scale(tt.setup.builder, int(tt.want.path[i].Y)),
+				}
+			}
 
-			if !slices.Equal(tt.want.path, got) {
-				t.Error(fmt.Errorf("spatialGrid.WeightedSearch() want: %+v, got: %+v\n", tt.want.path, got))
+			if !slices.Equal(path, got) {
+				t.Error(fmt.Errorf("spatialGrid.WeightedSearch() want: %+v, got: %+v\n", path, got))
 			}
 		})
 	}

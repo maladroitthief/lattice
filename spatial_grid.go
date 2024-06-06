@@ -178,9 +178,19 @@ func (sg *SpatialGrid[T]) GetLocationWeight(x, y int) float64 {
 	return sg.Nodes[x][y].weight
 }
 
-func (sg *SpatialGrid[T]) Node(x, y float64) spatialGridNode[T] {
+func (sg *SpatialGrid[T]) NodeAtPosition(x, y float64) spatialGridNode[T] {
 	xIndex, yIndex := sg.Location(x, y)
-	return sg.Nodes[xIndex][yIndex]
+	return sg.Node(xIndex, yIndex)
+}
+
+func (sg *SpatialGrid[T]) Node(x, y int) spatialGridNode[T] {
+	return spatialGridNode[T]{
+		Items:  sg.Nodes[x][y].Items,
+		x:      sg.Nodes[x][y].x,
+		y:      sg.Nodes[x][y].y,
+		bounds: sg.Nodes[x][y].bounds,
+		weight: sg.Nodes[x][y].weight,
+	}
 }
 
 func (sg *SpatialGrid[T]) Edges(sgn spatialGridNode[T]) []spatialGridNode[T] {
@@ -195,7 +205,7 @@ func (sg *SpatialGrid[T]) Edges(sgn spatialGridNode[T]) []spatialGridNode[T] {
 			continue
 		}
 
-		edges = append(edges, sg.Nodes[nextX][nextY])
+		edges = append(edges, sg.Node(nextX, nextY))
 	}
 
 	return edges
@@ -210,7 +220,7 @@ func (sg *SpatialGrid[T]) Search(
 	sg.nodesMu.RLock()
 	defer sg.nodesMu.RUnlock()
 
-	start := sg.Node(x, y)
+	start := sg.NodeAtPosition(x, y)
 
 	type index struct{ x, y int }
 	visited := map[index]struct{}{}
@@ -265,16 +275,17 @@ func (sg *SpatialGrid[T]) WeightedSearch(start, end mosaic.Vector, maxDepth int)
 	}
 
 	type index struct {
-		x int
-		y int
+		X int
+		Y int
 	}
 
-	startNode := sg.Node(start.X, start.Y)
-	endNode := sg.Node(end.X, end.Y)
+	startNode := sg.NodeAtPosition(start.X, start.Y)
+	endNode := sg.NodeAtPosition(end.X, end.Y)
 
 	cameFrom := map[index]spatialGridNode[T]{}
 	cameFrom[index{startNode.x, startNode.y}] = startNode
 	costs := map[index]float64{}
+	costs[index{startNode.x, startNode.y}] = 0
 
 	pq := caravan.NewPQ[spatialGridNode[T]](true)
 	pq.Enqueue(startNode, 0)
@@ -294,17 +305,29 @@ func (sg *SpatialGrid[T]) WeightedSearch(start, end mosaic.Vector, maxDepth int)
 			break
 		}
 
-		for _, nextNode := range sg.Edges(currentNode) {
-			newCost := costs[index{currentNode.x, currentNode.y}] + nextNode.weight
-			oldCost, ok := costs[index{nextNode.x, nextNode.y}]
-			if ok && newCost >= oldCost {
+		edges := sg.Edges(currentNode)
+		for i := 0; i < len(edges); i++ {
+			newCost := costs[index{currentNode.x, currentNode.y}] + edges[i].weight + heuristic(edges[i], endNode)
+			if math.IsInf(newCost, 1) {
 				continue
 			}
 
-			costs[index{nextNode.x, nextNode.y}] = newCost
-			priority := newCost + heuristic(nextNode, endNode)
-			pq.Enqueue(nextNode, int(priority))
-			cameFrom[index{nextNode.x, nextNode.y}] = currentNode
+			edgeCost, ok := costs[index{edges[i].x, edges[i].y}]
+			if ok && newCost >= edgeCost {
+				continue
+			}
+
+			costs[index{edges[i].x, edges[i].y}] = newCost
+			node := spatialGridNode[T]{
+				Items:  edges[i].Items,
+				x:      edges[i].x,
+				y:      edges[i].y,
+				bounds: edges[i].bounds,
+				weight: edges[i].weight,
+			}
+
+			pq.Enqueue(node, edgeCost)
+			cameFrom[index{edges[i].x, edges[i].y}] = currentNode
 		}
 		currentDepth++
 	}
