@@ -39,23 +39,27 @@ func setup_grid(sg *lattice.SpatialGrid[int], b Builder) {
 		case '0':
 		case '1':
 			sg.Insert(
-				1,
-				mosaic.NewRectangle(
-					mosaic.Vector{X: xPos(b, i), Y: yPos(b, i)},
-					float64(b.size),
-					float64(b.size),
-				),
-				1.0,
+				lattice.Item[int]{
+					1,
+					mosaic.NewRectangle(
+						mosaic.Vector{X: xPos(b, i), Y: yPos(b, i)},
+						float64(b.size),
+						float64(b.size),
+					),
+					1.0,
+				},
 			)
 		case 'x':
 			sg.Insert(
-				9,
-				mosaic.NewRectangle(
-					mosaic.Vector{X: xPos(b, i), Y: yPos(b, i)},
-					float64(b.size),
-					float64(b.size),
-				),
-				math.Inf(1),
+				lattice.Item[int]{
+					9,
+					mosaic.NewRectangle(
+						mosaic.Vector{X: xPos(b, i), Y: yPos(b, i)},
+						float64(b.size),
+						float64(b.size),
+					),
+					math.Inf(1),
+				},
 			)
 		default:
 		}
@@ -105,7 +109,7 @@ func Test_spatial_grid_Insert(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			sg := lattice.NewSpatialGrid[int](tt.fields.x, tt.fields.y, tt.fields.size)
 			for _, param := range tt.params {
-				sg.Insert(param.item, param.bounds, param.multiplier)
+				sg.Insert(lattice.Item[int]{param.item, param.bounds, param.multiplier})
 			}
 
 			for _, want := range tt.wants {
@@ -443,9 +447,11 @@ func BenchmarkSpatialGridSize(b *testing.B) {
 		sizeX := GridSize * rand.Float64()
 		sizeY := GridSize * rand.Float64()
 		sg.Insert(
-			rand.Int(),
-			mosaic.NewRectangle(mosaic.Vector{X: x0, Y: y0}, sizeX, sizeY),
-			rand.Float64(),
+			lattice.Item[int]{
+				rand.Int(),
+				mosaic.NewRectangle(mosaic.Vector{X: x0, Y: y0}, sizeX, sizeY),
+				rand.Float64(),
+			},
 		)
 	}
 
@@ -462,9 +468,11 @@ func BenchmarkSpatialGridInsert(b *testing.B) {
 		sizeX := GridSize * rand.Float64()
 		sizeY := GridSize * rand.Float64()
 		sg.Insert(
-			rand.Int(),
-			mosaic.NewRectangle(mosaic.Vector{X: x0, Y: y0}, sizeX, sizeY),
-			rand.Float64(),
+			lattice.Item[int]{
+				rand.Int(),
+				mosaic.NewRectangle(mosaic.Vector{X: x0, Y: y0}, sizeX, sizeY),
+				rand.Float64(),
+			},
 		)
 	}
 }
@@ -485,7 +493,7 @@ func BenchmarkSpatialGridDelete(b *testing.B) {
 
 		value := rand.Int()
 		bounds := mosaic.NewRectangle(mosaic.Vector{X: x0, Y: y0}, sizeX, sizeY)
-		sg.Insert(value, bounds, rand.Float64())
+		sg.Insert(lattice.Item[int]{value, bounds, rand.Float64()})
 		entities = append(entities, entity{value: value, bounds: bounds})
 	}
 
@@ -515,9 +523,11 @@ func BenchmarkSpatialGridFindNear(b *testing.B) {
 		entities = append(entities, bounds)
 
 		sg.Insert(
-			rand.Int(),
-			bounds,
-			rand.Float64(),
+			lattice.Item[int]{
+				rand.Int(),
+				bounds,
+				rand.Float64(),
+			},
 		)
 	}
 
@@ -543,9 +553,11 @@ func BenchmarkSpatialGridWeightedSearch(b *testing.B) {
 		)
 
 		sg.Insert(
-			rand.Int(),
-			mosaic.NewRectangle(mosaic.Vector{X: x0, Y: y0}, sizeX, sizeY),
-			rand.Float64(),
+			lattice.Item[int]{
+				rand.Int(),
+				mosaic.NewRectangle(mosaic.Vector{X: x0, Y: y0}, sizeX, sizeY),
+				rand.Float64(),
+			},
 		)
 	}
 

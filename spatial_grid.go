@@ -34,6 +34,12 @@ type (
 		multiplier float64
 		weight     float64
 	}
+
+	Item[T comparable] struct {
+		Value      T
+		Bounds     mosaic.Rectangle
+		Multiplier float64
+	}
 )
 
 var (
@@ -74,28 +80,49 @@ func (sg *SpatialGrid[T]) Size() int {
 	return sg.itemCount
 }
 
-func (sg *SpatialGrid[T]) Insert(val T, bounds mosaic.Rectangle, multiplier float64) {
+func (sg *SpatialGrid[T]) Insert(item Item[T]) {
 	sg.nodesMu.Lock()
 	defer sg.nodesMu.Unlock()
 
-	x, y := sg.Location(bounds.Position.X, bounds.Position.Y)
-	sg.Nodes[x][y] = sg.Nodes[x][y].Insert(val, bounds, multiplier)
+	sg.insert(item)
+}
+
+func (sg *SpatialGrid[T]) insert(item Item[T]) {
+	x, y := sg.Location(item.Bounds.Position.X, item.Bounds.Position.Y)
+	sg.Nodes[x][y] = sg.Nodes[x][y].Insert(item.Value, item.Bounds, item.Multiplier)
 	sg.itemCount++
 }
 
-func (sg *SpatialGrid[T]) Update(val T, oldBounds, newBounds mosaic.Rectangle, multiplier float64) {
-	sg.Delete(val, oldBounds)
-	sg.Insert(val, newBounds, multiplier)
+func (sg *SpatialGrid[T]) Update(item Item[T], oldBounds mosaic.Rectangle) {
+	sg.nodesMu.Lock()
+	defer sg.nodesMu.Unlock()
+
+	sg.delete(item.Value, oldBounds)
+	sg.insert(item)
 }
 
 func (sg *SpatialGrid[T]) Delete(val T, bounds mosaic.Rectangle) {
 	sg.nodesMu.Lock()
 	defer sg.nodesMu.Unlock()
 
+	sg.delete(val, bounds)
+}
+
+func (sg *SpatialGrid[T]) delete(val T, bounds mosaic.Rectangle) {
 	x, y := sg.Location(bounds.Position.X, bounds.Position.Y)
 	sg.Nodes[x][y] = sg.Nodes[x][y].Delete(val)
 
 	sg.itemCount--
+}
+
+func (sg *SpatialGrid[T]) Reset(items []Item[T]) {
+	sg.nodesMu.Lock()
+	defer sg.nodesMu.Unlock()
+
+	sg.drop()
+	for i := 0; i < len(items); i++ {
+		sg.insert(items[i])
+	}
 }
 
 func (sg *SpatialGrid[T]) FindNear(bounds mosaic.Rectangle) []T {
@@ -122,6 +149,10 @@ func (sg *SpatialGrid[T]) Drop() {
 	sg.nodesMu.Lock()
 	defer sg.nodesMu.Unlock()
 
+	sg.drop()
+}
+
+func (sg *SpatialGrid[T]) drop() {
 	nodes := make([][]spatialGridNode[T], sg.SizeX)
 	for iX := range nodes {
 		nodes[iX] = make([]spatialGridNode[T], sg.SizeY)
@@ -267,8 +298,8 @@ func (sg *SpatialGrid[T]) Search(
 }
 
 func (sg *SpatialGrid[T]) WeightedSearch(start, end mosaic.Vector, maxDepth int) ([]mosaic.Vector, error) {
-	sg.nodesMu.Lock()
-	defer sg.nodesMu.Unlock()
+	sg.nodesMu.RLock()
+	defer sg.nodesMu.RUnlock()
 
 	heuristic := func(from, to spatialGridNode[T]) float64 {
 		return math.Abs(float64(from.x-to.x)) + math.Abs(float64(from.y-to.y))
