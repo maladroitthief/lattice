@@ -267,8 +267,8 @@ func (sg *SpatialGrid[T]) Search(
 }
 
 func (sg *SpatialGrid[T]) WeightedSearch(start, end mosaic.Vector, maxDepth int) ([]mosaic.Vector, error) {
-	sg.nodesMu.RLock()
-	defer sg.nodesMu.RUnlock()
+	sg.nodesMu.Lock()
+	defer sg.nodesMu.Unlock()
 
 	heuristic := func(from, to spatialGridNode[T]) float64 {
 		return math.Abs(float64(from.x-to.x)) + math.Abs(float64(from.y-to.y))
