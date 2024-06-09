@@ -394,6 +394,66 @@ func Test_spatial_grid_WeightedSearch(t *testing.T) {
 				err: nil,
 			},
 		},
+		{
+			name: "long path",
+			setup: setup{
+				builder: Builder{
+					x:    18,
+					y:    18,
+					size: 32,
+					layout: "" +
+						"0xxxxxx00xxxx0x0x0" +
+						"00000000000000x0x0" +
+						"0xxxxxx00xxxx0xx00" +
+						"00x00000000000x000" +
+						"00x0xx00xxxxxxx000" +
+						"00x000000000000000" +
+						"0xxx00000x0x0x0x00" +
+						"00x0000000x0000000" +
+						"000xx00000xxx0x000" +
+						"00x000x00000x0x0x0" +
+						"0x00xxxx00xxxxxxx0" +
+						"0x00x00x00x00000x0" +
+						"0000x00x00x0x0x0x0" +
+						"0x00000000x0x0x0x0" +
+						"00x0x00x00x0xxx0x0" +
+						"0xx0000x00x00000x0" +
+						"0x00x00x00x0xxx0x0" +
+						"000000000000000000",
+				},
+			},
+			params: params{
+				start: mosaic.NewVector(9, 9),
+				end:   mosaic.NewVector(13, 13),
+				depth: 32,
+			},
+			want: want{
+				path: []mosaic.Vector{
+					{X: 9, Y: 9},
+					{X: 9, Y: 10},
+					{X: 9, Y: 11},
+					{X: 9, Y: 12},
+					{X: 9, Y: 13},
+					{X: 9, Y: 14},
+					{X: 9, Y: 15},
+					{X: 9, Y: 16},
+					{X: 9, Y: 17},
+					{X: 10, Y: 17},
+					{X: 11, Y: 17},
+					{X: 11, Y: 16},
+					{X: 11, Y: 15},
+					{X: 11, Y: 14},
+					{X: 11, Y: 13},
+					{X: 11, Y: 12},
+					{X: 11, Y: 11},
+					{X: 12, Y: 11},
+					{X: 13, Y: 11},
+					{X: 13, Y: 12},
+					{X: 13, Y: 13},
+				},
+				err: nil,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

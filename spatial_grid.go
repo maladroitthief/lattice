@@ -322,6 +322,7 @@ func (sg *SpatialGrid[T]) WeightedSearch(start, end mosaic.Vector, maxDepth int)
 	pq.Enqueue(startNode, 0)
 
 	currentDepth := 0
+PQLoop:
 	for pq.Len() > 0 {
 		if currentDepth > maxDepth {
 			return []mosaic.Vector{}, ErrMaxDepthReached
@@ -333,7 +334,7 @@ func (sg *SpatialGrid[T]) WeightedSearch(start, end mosaic.Vector, maxDepth int)
 		}
 
 		if currentNode.x == endNode.x && currentNode.y == endNode.y {
-			break
+			break PQLoop
 		}
 
 		edges := sg.Edges(currentNode)
@@ -359,6 +360,10 @@ func (sg *SpatialGrid[T]) WeightedSearch(start, end mosaic.Vector, maxDepth int)
 			priority := newCost + heuristic(edges[i], endNode)
 			pq.Enqueue(node, priority)
 			cameFrom[index{edges[i].x, edges[i].y}] = currentNode
+
+			if edges[i].x == endNode.x && edges[i].y == endNode.y {
+				break PQLoop
+			}
 		}
 		currentDepth++
 	}
