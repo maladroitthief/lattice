@@ -1,0 +1,47 @@
+---
+name: build-and-test
+
+on:
+  pull_request:
+    branches:
+      - "main"
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+
+      - name: Install dependencies
+        run: >
+          sudo apt-get install -y gcc libc6-dev libglu1-mesa-dev
+          libgl1-mesa-dev libxcursor-dev libxi-dev libxinerama-dev
+          libxrandr-dev libxxf86vm-dev libasound2-dev pkg-config
+
+      - name: Build
+        run: go build -v ./...
+
+      - name: Test
+        run: go test -v ./...
+
+      - name: Benchmark
+        run: go test -bench=. -benchmem | tee output.txt
+
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'go'
+          output-file-path: output.txt
+          fail-on-alert: true
+          summary-always: true
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          comment-on-alert: true
+          alert-comment-cc-users: '@maladroitthief'
+          auto-push: true
+          benchmark-data-dir-path: "benchmark"
